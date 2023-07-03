@@ -1,0 +1,26 @@
+{
+  "name": "prediction",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/franalt/prediction.git"
+  },
+  "author": "Franco Altuna",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/franalt/prediction/issues"
+  },
+  "homepage": "https://github.com/franalt/prediction#readme",
+  "dependencies": {
+    "@tensorflow/tfjs": "^4.8.0",
+    "axios": "^1.4.0",
+    "brain.js": "^2.0.0-beta.23",
+    "node-binance-api": "^0.13.1",
+    "uuid": "^9.0.0"
+  }
+}
