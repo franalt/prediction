@@ -7,7 +7,7 @@ async function trainModelAndSave(modelFilePath, newData) {
     // Check if the model file exists
     if (fs.existsSync(modelFilePath)) {
         // Load the existing model from file
-        model = await tf.loadLayersModel(`file://${modelFilePath}`);
+        model = await tf.loadLayersModel(`file: //${modelFilePath}`);
     } else {
         // Create a new model if the file doesn't exist
         model = createModel();
