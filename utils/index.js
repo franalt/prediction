@@ -1,6 +1,7 @@
 "use strict";
 
 const axios = require("axios");
+const fs = require("fs");
 
 const Utils = {
     respond: async function (req, res, fn) {
@@ -807,6 +808,26 @@ const Utils = {
             result += characters.charAt(Math.floor(Math.random() * charactersLength));
         }
         return result;
+    },
+    saveJSON: async function (filename, data) {
+        return new Promise(async function (resolve, reject) {
+            fs.writeFile(`./model/${filename}.json`, JSON.stringify(data), (error) => {
+                if (error) {
+                    return reject(error);
+                }
+                return resolve();
+            });
+        });
+    },
+    readJSON: async function (filename) {
+        return new Promise(async function (resolve, reject) {
+            fs.readFile(`./model/${filename}.json`, (error, data) => {
+                if (error) {
+                    return reject(error);
+                }
+                return resolve(JSON.parse(data));
+            });
+        });
     }
 };
 

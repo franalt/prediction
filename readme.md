@@ -1,0 +1,1 @@
+Utilizing Brain.js write a function in Node.JS that reads a model from a file (Creates a new one if there is no file), trains the model with new data (The data is composed of price, volume, cci and rsi numerical values) and then makes a prediction with new data
