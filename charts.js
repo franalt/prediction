@@ -5,7 +5,7 @@ const Utils = require("./utils");
 var pairs = ["BTC/USDT", "ETH/USDT"];
 
 const from = new Date();
-from.setFullYear(from.getFullYear() - 1);
+from.setFullYear(from.getFullYear() - 5);
 const to = new Date();
 
 var cpus = 2; //require("os").cpus().length;

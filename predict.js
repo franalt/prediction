@@ -16,6 +16,40 @@ const trendMap = {
     downtrend: 0
 };
 
+const eventMap = {
+    bb_bottom_cross_up: 1,
+    bb_bottom_cross_down: 2,
+    bb_top_cross_up: 3,
+    bb_top_cross_up: 4,
+    bb_top_cross_down: 5,
+    supertrend_sell: 6,
+    supertrend_buy: 7,
+    cci_oversold_start: 8,
+    cci_oversold_end: 9,
+    cci_overbought_start: 10,
+    cci_overbought_end: 11,
+    rsi7_oversold_start: 12,
+    rsi7_oversold_end: 13,
+    rsi7_overbought_start: 14,
+    rsi7_overbought_end: 15,
+    rsi14_oversold_start: 16,
+    rsi14_oversold_end: 17,
+    rsi14_overbought_start: 18,
+    rsi14_overbought_end: 19,
+    mfi_oversold_start: 20,
+    mfi_oversold_end: 21,
+    mfi_overbought_start: 22,
+    mfi_overbought_end: 23,
+    macd_bearish_momentum_decay: 24,
+    macd_bullish_momentum_decay: 25,
+    macd_bullish_crossover: 26,
+    macd_bearish_crossover: 27,
+    emaFast_bullish_crossover: 28,
+    emaFast_bearish_crossover: 29,
+    emaSlow_bullish_crossover: 30,
+    emaSlow_bearish_crossover: 31
+};
+
 var inputData = [];
 async function analyzeTimeSeries() {
     var data = (await Utils.readJSON("BTCUSDT")).map((object) => {
@@ -30,7 +64,7 @@ async function analyzeTimeSeries() {
             Math.abs(object.mfi14) || 0,
             Math.abs(object.rsi7) || 0,
             Math.abs(object.rsi14) || 0,
-            Math.abs(object.ema7) || 0,
+            Math.abs(eventMap[object.events[0]] || 0),
             Math.abs(trendMap[object.trend] || 0),
             Math.abs(candlestickMap[object.candlestick] || 0)
         ].map(normalize());
@@ -39,7 +73,7 @@ async function analyzeTimeSeries() {
         inputData.push(data[i]);
     }
     const model = await loadModel();
-    const predictionInputData = inputData.slice(-10);
+    const predictionInputData = inputData.slice(-1);
     const predictionInputTensor = tf.tensor(predictionInputData, [predictionInputData.length, 1, predictionInputData[0].length]);
     const predictions = model.predict(predictionInputTensor);
     const predictedValues = Array.from(predictions.dataSync());
