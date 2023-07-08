@@ -57,12 +57,12 @@ async function trainModel(X, Y, window_size, n_epochs, learning_rate, n_layers, 
         batchSize: batch_size,
         epochs: n_epochs,
         callbacks: {
-            onEpochEnd: async (epoch, log) => {
-                callback(epoch, log);
+            onEpochEnd: (epoch, logs) => {
+                console.log("Epoch:", epoch + 1);
+                console.log("Loss:", logs.loss);
             }
         }
     });
-    console.log(13);
     await makePredictions(X, model, {
         inputMax: inputMax, // Maximum value used for input normalization
         inputMin: inputMin, // Minimum value used for input normalization
@@ -171,7 +171,7 @@ async function getData() {
             Math.abs(candlestickMap[object.candlestick] || 0)
         ];
     });
-    var outputs = inputs.map((input) => input[0]);
+    var outputs = inputs.map((input, index) => (inputs[index + 1] ? inputs[index + 1][0] : input[0]));
 
     let window_size = 16;
     let trainingsize = 80;

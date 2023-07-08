@@ -1,8 +1,5 @@
-const tf = require("@tensorflow/tfjs-node");
-const fs = require("fs");
+const ModelsService = require("./services/models.service");
 const Utils = require("./utils");
-const express = require("express");
-const modelFilePath = "./model";
 
 const candlestickMap = {
     down: 0,
@@ -50,9 +47,19 @@ const eventMap = {
     emaSlow_bearish_crossover: 31
 };
 
-var inputData = [];
-async function analyzeTimeSeries() {
-    var data = (await Utils.readJSON("BTCUSDT")).map((object) => {
+async function run() {
+    let model = await ModelsService.loadModel({ name: "test" });
+    if (!model) {
+        model = await ModelsService.createModel({
+            input_layer_neurons: 64,
+            input_data_features: 16,
+            hidden_layers: 1,
+            output_layer_neurons: 1,
+            output_layer_features: 1,
+            learning_rate: 0.01
+        });
+    }
+    let data = (await Utils.readJSON("BTCUSDT")).map((object) => {
         return [
             object.close,
             object.open,
@@ -65,111 +72,30 @@ async function analyzeTimeSeries() {
             Math.abs(object.rsi7) || 0,
             Math.abs(object.rsi14) || 0,
             Math.abs(eventMap[object.events[0]] || 0),
+            Math.abs(eventMap[object.events[1]] || 0),
+            Math.abs(eventMap[object.events[2]] || 0),
+            Math.abs(eventMap[object.events[3]] || 0),
             Math.abs(trendMap[object.trend] || 0),
             Math.abs(candlestickMap[object.candlestick] || 0)
-        ].map(normalize());
+        ];
     });
-    for (let i = 0; i < data.length; i++) {
-        inputData.push(data[i]);
-    }
-    console.log("Input dataset lenth", inputData.length);
-    const inputShape = [inputData.length, 13];
-    console.log("Input shape", inputShape);
-    const batchSize = 128;
-    const epochs = 20;
-    console.log("Parameters", {
-        batchSize,
-        epochs
+    data = data.slice(-200);
+    let { dictionary } = await ModelsService.trainModel({
+        model,
+        data,
+        split: 0.8,
+        batch_size: 100,
+        epochs: 1
     });
-    const model = await loadModel();
-    const trainingInputData = [];
-    const trainingTargetData = [];
-    for (let i = 0; i < inputData.length; i++) {
-        trainingInputData.push(inputData[i]);
-        trainingTargetData.push((inputData[i + 1] || inputData[i])[0]);
-    }
-    const trainingInputTensor = tf.tensor(trainingInputData, [trainingInputData.length, 1, trainingInputData[0].length]);
-    console.log({
-        trainingInputTensor
+    await ModelsService.saveModel({
+        name: "test",
+        model,
+        dictionary
     });
-    const trainingOutputTensor = tf.tensor1d(trainingTargetData);
-    console.log({
-        trainingOutputTensor
+    await ModelsService.makePrediction({
+        model,
+        data: data.slice(-100),
+        dictionary
     });
-    model.compile({
-        optimizer: "adam",
-        loss: "meanSquaredError"
-    });
-    let loss;
-    await model.fit(trainingInputTensor, trainingOutputTensor, {
-        batchSize,
-        epochs,
-        shuffle: false,
-        validationSplit: 0.2,
-        callbacks: {
-            onEpochEnd: (epoch, logs) => {
-                loss = logs.loss;
-            }
-        }
-    });
-    await saveModel(model);
-    console.log("Training completed, loss:", loss);
-
-    // Prepare the input data for prediction
-    const predictionInputData = inputData.slice(-1); // Use the last 10 data points for prediction
-    const predictionInputTensor = tf.tensor(predictionInputData, [predictionInputData.length, 1, predictionInputData[0].length]);
-    console.log({
-        predictionInputTensor
-    });
-    // Make predictions
-    const predictions = model.predict(predictionInputTensor);
-    const predictedValues = Array.from(predictions.dataSync()); // Convert tensor to an array
-
-    // Display the predicted values
-    console.log("Predicted values:", predictedValues.map(denormalize())[0], inputData.slice(-1)[0].map(denormalize())[0]);
 }
-
-function normalize() {
-    var delta = 100000;
-    return function (val) {
-        return val / delta;
-    };
-}
-
-function denormalize() {
-    var delta = 100000;
-    return function (val) {
-        return val * delta;
-    };
-}
-
-function createModel() {
-    console.log("Creating model");
-    var model = tf.sequential();
-    console.log("Adding LSTM layer");
-    model.add(tf.layers.lstm({ units: 64, inputShape: [1, inputData[0].length] }));
-    console.log("Adding DENSE layer");
-    model.add(tf.layers.dense({ units: 1 }));
-    return model;
-}
-
-async function saveModel(model) {
-    await model.save(`file://${modelFilePath}`);
-    console.log("Model saved");
-}
-
-// Load or create the model
-async function loadModel() {
-    if (fs.existsSync(`${modelFilePath}/model.json`)) {
-        // Load the existing model
-        const model = await tf.loadLayersModel(`file://${modelFilePath}/model.json`);
-        console.log("Loaded model from file");
-        return model;
-    } else {
-        // Create a new model
-        const model = createModel();
-        console.log("Created a new model");
-        return model;
-    }
-}
-analyzeTimeSeries();
+run();
