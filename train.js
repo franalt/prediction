@@ -81,9 +81,6 @@ async function analyzeTimeSeries() {
         batchSize,
         epochs
     });
-    console.log("Preparing input tensor");
-    const inputTensor = tf.tensor(inputData, inputShape);
-    console.log("Input tensor", { ...inputTensor });
     const model = await loadModel();
     const trainingInputData = [];
     const trainingTargetData = [];
@@ -147,11 +144,15 @@ function denormalize() {
 }
 
 function createModel() {
+    console.log("Creating model");
     var model = tf.sequential();
+    console.log("Adding LSTM layer");
     model.add(tf.layers.lstm({ units: 64, inputShape: [1, inputData[0].length] }));
+    console.log("Adding DENSE layer");
     model.add(tf.layers.dense({ units: 1 }));
     return model;
 }
+
 async function saveModel(model) {
     await model.save(`file://${modelFilePath}`);
     console.log("Model saved");
