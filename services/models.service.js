@@ -2,22 +2,32 @@
 
 const fs = require("fs");
 const tf = require("@tensorflow/tfjs-node");
-const DataService = require("./data.service");
 
 const ModelsService = {
     loadModel: async function ({ name }) {
-        /*if (fs.existsSync(`./models/${name}.json`)) {
+        if (fs.existsSync(`./models/${name}`)) {
             console.log("Loading model", name);
-            const model = await tf.loadLayersModel(`file://./models/${name}.json`);
-            console.log("Loaded model from file");
+            const model = await tf.loadLayersModel(`file://./models/${name}/model.json`);
+            console.log("Loaded model from file", {
+                name: model.name,
+                loss: model.training_loss
+            });
             return model;
-        }*/
+        }
         console.log("No model found with that name");
         return;
     },
-    saveModel: async function ({ name, model }) {
+    compileModel: async function (model) {
+        console.log("Compiling model");
+        await model.compile({
+            optimizer: tf.train.adam(model.learning_rate),
+            loss: "meanSquaredError"
+        });
+        return;
+    },
+    saveModel: async function ({ model }) {
         console.log("Saving model");
-        await model.save(`file://./models/${name}.json`);
+        await model.save(`file://./models/${model.name}`);
         return model;
     },
     createModel: async function ({ input_layer_neurons, input_data_features, hidden_layers, output_layer_neurons, learning_rate }) {
@@ -39,6 +49,7 @@ const ModelsService = {
         const output_layer_shape = rnn_output_neurons;
         console.log("Creating sequential model");
         const model = tf.sequential();
+        model.name = "sequential";
         console.log("Adding DENSE layer");
         model.add(tf.layers.dense({ units: input_layer_neurons, inputShape: [input_layer_shape] }));
         console.log("Reshaping DENSE layer");
@@ -58,11 +69,6 @@ const ModelsService = {
         );
         console.log("Adding DENSE layer output");
         model.add(tf.layers.dense({ units: output_layer_neurons, inputShape: [output_layer_shape] }));
-        console.log("Compiling model");
-        model.compile({
-            optimizer: tf.train.adam(learning_rate),
-            loss: "meanSquaredError"
-        });
         return model;
     },
     trainModel: async function ({ data, split, model, batch_size, epochs }) {
@@ -73,54 +79,47 @@ const ModelsService = {
             batch_size,
             epochs
         });
-        let { input_data, output_data } = ModelsService.splitData({ data, split });
+        let { input_data, labeled_data } = ModelsService.labelData(data);
         console.log("Creating input tensor");
         const inputTensor = tf.tensor2d(input_data, [input_data.length, input_data[0].length]);
         console.log("Creating output tensor");
-        const outputTensor = tf.tensor2d(output_data, [output_data.length, 1]).reshape([output_data.length, 1]);
+        const labeledTensor = tf.tensor2d(labeled_data, [labeled_data.length, 1]).reshape([labeled_data.length, 1]);
         console.log("Normalizing input tensor");
         const [xs, input_min, input_max] = ModelsService.normalizeTensorFit(inputTensor);
         console.log("Normalizing output tensor");
-        const [ys, output_max, output_min] = ModelsService.normalizeTensorFit(outputTensor);
+        const [ys, output_max, output_min] = ModelsService.normalizeTensorFit(labeledTensor);
         console.log("Training model");
-        let loss;
         await model.fit(xs, ys, {
-            validationSplit: 0.2,
             batchSize: batch_size,
-            verbose: 0,
+            verbose: 1,
             epochs,
             callbacks: {
                 onEpochEnd: (epoch, logs) => {
-                    console.log("Epoch:", epoch + 1);
-                    console.log("Loss:", logs.loss);
-                    loss = logs.loss;
+                    model.training_loss = logs.loss;
                 }
             }
         });
-        console.log("Finished training model");
-        console.log("Model loss", loss);
-        return {
-            model,
-            dictionary: {
-                input_min,
-                input_max,
-                output_max,
-                output_min
-            }
+        console.log("Adding dictionary to model");
+        model.dictionary = {
+            input_min,
+            input_max,
+            output_max,
+            output_min
         };
+        console.log("Finished training model", model.loss);
+        return model;
     },
-    makePrediction: async function ({ model, data, dictionary }) {
+    makePrediction: async function ({ model, data }) {
         console.log("Making prediction");
         console.log("Creating the input tensor");
-        data = tf.tensor2d(data, [data.length, data[0].length]);
-        console.log("Normalizing the tensor data");
-        const normalizedInput = ModelsService.normalizeTensor(data, dictionary["input_max"], dictionary["input_min"]);
+        const inputTensor = tf.tensor2d(data, [data.length, data[0].length]);
+        console.log("Normalizing the input tensor data");
+        const normalizedInput = ModelsService.normalizeTensor(inputTensor, model.dictionary["input_max"], model.dictionary["input_min"]);
         console.log("Executing prediction");
         const model_out = model.predict(normalizedInput);
-        console.log("Unormalizing tensor");
-        const predictedResults = ModelsService.unNormalizeTensor(model_out, dictionary["output_max"], dictionary["output_min"]);
-        console.log(Array.from(predictedResults.dataSync()));
-        return Array.from(predictedResults.dataSync());
+        console.log("Unnormalizing the output tensor");
+        const unnormalizedOutput = ModelsService.unNormalizeTensor(model_out, model.dictionary["output_max"], model.dictionary["output_min"]);
+        return Array.from(unnormalizedOutput.dataSync())[0];
     },
     normalizeTensorFit: function (tensor) {
         const minval = tensor.min();
@@ -136,22 +135,13 @@ const ModelsService = {
         const unNormTensor = tensor.mul(maxval.sub(minval)).add(minval);
         return unNormTensor;
     },
-    splitData: function ({ data, split }) {
-        console.log("Splitting data");
-        if (!split) {
-            split = 0.8;
-        }
-        let input_data = data.slice(0, Math.floor(split * data.length));
-        let output_data = data.map((input, index) => (input_data[index + 1] ? input_data[index + 1][0] : input[0]));
-        output_data = output_data.slice(0, Math.floor(split * output_data.length));
-        console.log({
-            data: data.length,
-            input_data: input_data.length,
-            output_data: output_data.length
-        });
+    labelData: function (data) {
+        console.log("Creating labeled data");
+        let input_data = data;
+        let labeled_data = data.map((input, index) => (input_data[index + 1] ? input_data[index + 1][0] : input[0]));
         return {
             input_data,
-            output_data
+            labeled_data
         };
     }
 };
